@@ -3,7 +3,7 @@ import { db } from './firebase';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 
 export default function App() {
-  const [role, setRole] = useState(localStorage.getItem('user_role') || 'select'); // 'select', 'worker', 'admin'
+  const [role, setRole] = useState(localStorage.getItem('user_role') || 'select');
   const [workers, setWorkers] = useState([]);
   const [payments, setPayments] = useState([]);
   const [extraJobs, setExtraJobs] = useState([]);
@@ -11,7 +11,7 @@ export default function App() {
   // Admin Giriş State-i
   const [adminPinInput, setAdminPinInput] = useState('');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const ADMIN_PIN = "9999"; // Admin paneli üçün gizli şifrəniz
+  const ADMIN_PIN = "9999"; 
 
   // Usta Giriş / Qeydiyyat State-ləri
   const [isRegistering, setIsRegistering] = useState(false);
@@ -20,16 +20,16 @@ export default function App() {
   const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPin, setRegPin] = useState('');
-  const [activeWorker, setActiveWorker] = useState(null); // Giriş etmiş usta
+  const [activeWorker, setActiveWorker] = useState(null); 
 
   // Admin Modal (Tarixçə pəncərəsi)
   const [selectedWorkerForHistory, setSelectedWorkerForHistory] = useState(null);
 
-  // Form State-ləri
+  // Usta Form State-ləri
   const [reqAmount, setReqAmount] = useState('');
   const [reqDesc, setReqDesc] = useState('');
   
-  // Admin: Ödəniş və İş Tapşırığı Form State-ləri
+  // Admin Form State-ləri (Ödəniş və İş Tapşırığı)
   const [paymentWorkerId, setPaymentWorkerId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
@@ -127,6 +127,7 @@ export default function App() {
         amount: Number(reqAmount),
         description: reqDesc,
         status: "pending",
+        assignedByAdmin: false,
         date: new Date().toLocaleDateString('az-AZ')
       });
       setReqAmount('');
@@ -137,7 +138,7 @@ export default function App() {
     }
   };
 
-  // ADMIN: Ustaya İş / Məbləğ Təyin Etmək (Avtomatik balansına oturur)
+  // ADMIN: USTAYA İŞ TAPŞIRMAQ VƏ QİYMƏT TƏYİN ETMƏK
   const handleAssignJob = async (e) => {
     e.preventDefault();
     if (!assignWorkerId || !assignAmount || !assignTitle) return alert("Bütün xanaları doldurun!");
@@ -151,20 +152,21 @@ export default function App() {
         totalEarned: currentEarned + Number(assignAmount)
       });
 
-      // 2. İşlərin siyahısına təsdiqlənmiş iş kimi qeyd edilir
+      // 2. İşlərin siyahısına Admin tərəfindən tapşırılmış təsdiqli iş kimi əlavə olunur
       await addDoc(collection(db, "extraJobs"), {
         workerId: assignWorkerId,
         workerName: targetWorker.fullname || targetWorker.name || 'Usta',
         amount: Number(assignAmount),
         description: assignTitle,
         status: "approved",
+        assignedByAdmin: true,
         date: new Date().toLocaleDateString('az-AZ')
       });
 
       setAssignWorkerId('');
       setAssignAmount('');
       setAssignTitle('');
-      alert("İş və məbləğ uğurla ustanın balansına əlavə olundu!");
+      alert("İş tapşırıldı və qiymət ustanın hesabına əlavə olundu!");
     } catch (err) {
       alert("Xəta baş verdi!");
     }
@@ -210,7 +212,7 @@ export default function App() {
 
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#0f172a', color: '#fff', marginBottom: '12px', boxSizing: 'border-box' };
 
-  // 1. GİRİŞ SEÇİM EKRANI
+  // 1. SEÇİM EKRANI
   if (role === 'select') {
     return (
       <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', fontFamily: 'sans-serif' }}>
@@ -286,7 +288,7 @@ export default function App() {
     const currentWorkerData = workers.find(w => w.id === activeWorker.id) || activeWorker;
     const totalEarned = Number(currentWorkerData?.totalEarned) || 0;
     const remaining = totalEarned - totalPaid;
-    const myRequests = extraJobs.filter(j => j.workerId === activeWorker.id);
+    const myJobsAndRequests = extraJobs.filter(j => j.workerId === activeWorker.id);
 
     return (
       <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '15px', fontFamily: 'sans-serif' }}>
@@ -337,19 +339,19 @@ export default function App() {
             )}
           </div>
 
-          <h4>📑 İş Tarixçəniz Və Göndərilən Sorğular</h4>
-          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {myRequests.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Hələ iş yoxdur.</p> : (
-              myRequests.map(r => (
-                <div key={r.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px' }}>
+          <h4>📋 Mənə Tapşırılan İşlər və Sorğular</h4>
+          <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+            {myJobsAndRequests.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Hələ tapşırılan iş və ya sorğu yoxdur.</p> : (
+              myJobsAndRequests.map(r => (
+                <div key={r.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px', borderLeft: r.assignedByAdmin ? '3px solid #38bdf8' : 'none' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <strong>{r.description}</strong>
-                    <span style={{ color: '#38bdf8' }}>{r.amount} AZN</span>
+                    <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{r.amount} AZN</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px' }}>
                     <span style={{ color: '#64748b' }}>Tarix: {r.date || 'Yoxdur'}</span>
-                    <strong style={{ color: r.status === 'approved' ? '#4ade80' : r.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
-                      {r.status === 'approved' ? '✓ Təsdiqləndi / Əlavə Olundu' : r.status === 'rejected' ? '✕ Rədd edildi' : '⏳ Gözləyir'}
+                    <strong style={{ color: r.assignedByAdmin ? '#38bdf8' : r.status === 'approved' ? '#4ade80' : r.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
+                      {r.assignedByAdmin ? '👑 Admin Tapşırığı' : r.status === 'approved' ? '✓ Təsdiqləndi' : r.status === 'rejected' ? '✕ Rədd edildi' : '⏳ Gözləyir'}
                     </strong>
                   </div>
                 </div>
@@ -401,18 +403,18 @@ export default function App() {
           <button onClick={() => selectRole('select')} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Çıxış</button>
         </div>
 
-        {/* ADMIN: USTAYA İŞ VƏ MƏBLƏĞ YAZMAQ (BALANSA OTURDUR) */}
+        {/* ADMIN: USTAYA İŞ VƏ MƏBLƏĞ TƏYİN ETMƏK */}
         <div style={{ marginTop: '20px' }}>
-          <form onSubmit={handleAssignJob} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '8px', border: '1px solid #0284c7' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>➕ Ustaya İş Tapşır (Doğrudan Balansına Yaz)</h4>
+          <form onSubmit={handleAssignJob} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #0284c7' }}>
+            <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '16px' }}>➕ Ustaya İş Tapşır (İş və Qiymət Təyin Et)</h3>
             <select value={assignWorkerId} onChange={e => setAssignWorkerId(e.target.value)} style={inputStyle} required>
               <option value="">-- Ustanı Seçin --</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
             </select>
-            <input type="text" placeholder="İşin Təsviri (Məs: Mətbəx mebeli yığılması)" value={assignTitle} onChange={e => setAssignTitle(e.target.value)} style={inputStyle} required />
-            <input type="number" placeholder="Məbləğ (AZN)" value={assignAmount} onChange={e => setAssignAmount(e.target.value)} style={inputStyle} required />
-            <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
-              ➕ İşi Qeyd Et Və Balansa Əlavə Et
+            <input type="text" placeholder="İşin Adı / Təsviri (Məs: Mətbəx mebeli yığılması)" value={assignTitle} onChange={e => setAssignTitle(e.target.value)} style={inputStyle} required />
+            <input type="number" placeholder="Təyin olunan Qiymət (AZN)" value={assignAmount} onChange={e => setAssignAmount(e.target.value)} style={inputStyle} required />
+            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+              📌 İşi Tapşır Və Balansa Əlavə Et
             </button>
           </form>
         </div>
@@ -471,15 +473,15 @@ export default function App() {
 
         {/* ÖDƏNİŞ ET FORMU */}
         <div style={{ marginTop: '25px' }}>
-          <form onSubmit={handleAddPayment} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '8px' }}>
-            <h4>💳 Ustaya Ödəniş Et (Verilən Maaş / Avans)</h4>
+          <form onSubmit={handleAddPayment} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px' }}>💳 Ustaya Ödəniş Et (Verilən Maaş / Avans)</h3>
             <select value={paymentWorkerId} onChange={e => setPaymentWorkerId(e.target.value)} style={inputStyle} required>
               <option value="">-- İşçini Seçin --</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
             </select>
             <input type="number" placeholder="Ödənilən Məbləğ (AZN)" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} style={inputStyle} required />
             <input type="text" placeholder="Qeyd (Örn: Avans, Maaş)" value={paymentNote} onChange={e => setPaymentNote(e.target.value)} style={inputStyle} />
-            <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>Ödənişi Qeyd Et</button>
+            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>Ödənişi Qeyd Et</button>
           </form>
         </div>
 
