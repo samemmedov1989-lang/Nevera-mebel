@@ -485,43 +485,86 @@ export default function App() {
           </form>
         </div>
 
-        {/* ADMIN ÜÇÜN TARİXÇƏ MODAL PƏNCƏRƏSİ */}
-        {selectedWorkerForHistory && (
-          <div onClick={() => setSelectedWorkerForHistory(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#1e293b', width: '100%', maxWidth: '450px', borderRadius: '12px', padding: '20px', border: '1px solid #334155', maxHeight: '80vh', overflowY: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                <div>
-                  <h3 style={{ margin: 0, color: '#38bdf8' }}>{selectedWorkerForHistory.fullname || selectedWorkerForHistory.name}</h3>
-                  <small style={{ color: '#94a3b8' }}>Tel: {selectedWorkerForHistory.phone}</small>
+        {/* ADMIN ÜÇÜN İŞ VƏ ÖDƏNİŞ TARİXÇƏSİ MODAL PƏNCƏRƏSİ */}
+        {selectedWorkerForHistory && (() => {
+          const wPayments = payments.filter(p => p.workerId === selectedWorkerForHistory.id);
+          const wJobs = extraJobs.filter(j => j.workerId === selectedWorkerForHistory.id);
+          const paid = wPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          const currentW = workers.find(w => w.id === selectedWorkerForHistory.id) || selectedWorkerForHistory;
+          const earned = Number(currentW.totalEarned) || 0;
+          const remaining = earned - paid;
+
+          return (
+            <div onClick={() => setSelectedWorkerForHistory(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '15px' }}>
+              <div onClick={(e) => e.stopPropagation()} style={{ backgroundColor: '#1e293b', width: '100%', maxWidth: '480px', borderRadius: '12px', padding: '20px', border: '1px solid #334155', maxHeight: '85vh', overflowY: 'auto' }}>
+                
+                {/* BAŞLIQ */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #334155', paddingBottom: '10px', marginBottom: '15px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, color: '#38bdf8' }}>👷 {currentW.fullname || currentW.name}</h3>
+                    <small style={{ color: '#94a3b8' }}>Tel: {currentW.phone}</small>
+                  </div>
+                  <button onClick={() => setSelectedWorkerForHistory(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '22px', cursor: 'pointer' }}>✕</button>
                 </div>
-                <button onClick={() => setSelectedWorkerForHistory(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '20px', cursor: 'pointer' }}>✕</button>
-              </div>
 
-              <p style={{ fontSize: '13px', color: '#64748b' }}>Ödəniş Tarixçəsi və Hesabat:</p>
-              
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {payments.filter(p => p.workerId === selectedWorkerForHistory.id).length === 0 ? (
-                  <p style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center', padding: '10px 0' }}>Hələ ki bu ustaya ödəniş edilməyib.</p>
-                ) : (
-                  payments.filter(p => p.workerId === selectedWorkerForHistory.id).map((p) => (
-                    <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <strong style={{ color: '#4ade80', fontSize: '15px' }}>+{p.amount} AZN</strong>
-                        <div style={{ fontSize: '11px', color: '#64748b' }}>{p.date || 'Tarix yoxdur'}</div>
+                {/* HESABAT BÖLMƏSİ */}
+                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                  <div>Qazanc: <br/><strong style={{ color: '#38bdf8', fontSize: '15px' }}>{earned} AZN</strong></div>
+                  <div>Ödənilib: <br/><strong style={{ color: '#4ade80', fontSize: '15px' }}>{paid} AZN</strong></div>
+                  <div>Qalan Borc: <br/><strong style={{ color: remaining > 0 ? '#f43f5e' : '#4ade80', fontSize: '15px' }}>{remaining} AZN</strong></div>
+                </div>
+
+                {/* 1. İŞLƏR SİYAHISI */}
+                <h4 style={{ color: '#f59e0b', margin: '15px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🛠️ Görülən Və Tapşırılan İşlər ({wJobs.length})</h4>
+                <div style={{ display: 'grid', gap: '8px', marginBottom: '15px' }}>
+                  {wJobs.length === 0 ? (
+                    <p style={{ color: '#64748b', fontSize: '13px', margin: '5px 0' }}>Hələ heç bir iş qeydə alınmayıb.</p>
+                  ) : (
+                    wJobs.map((j) => (
+                      <div key={j.id} style={{ backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '6px', borderLeft: j.assignedByAdmin ? '3px solid #38bdf8' : '3px solid #f59e0b' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <strong style={{ fontSize: '14px' }}>{j.description}</strong>
+                          <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{j.amount} AZN</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px' }}>
+                          <span style={{ color: '#64748b' }}>Tarix: {j.date || 'Yoxdur'}</span>
+                          <strong style={{ color: j.assignedByAdmin ? '#38bdf8' : j.status === 'approved' ? '#4ade80' : j.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
+                            {j.assignedByAdmin ? '👑 Admin Tapşırığı' : j.status === 'approved' ? '✓ Təsdiqlənib' : j.status === 'rejected' ? '✕ Rədd edilib' : '⏳ Gözləyir'}
+                          </strong>
+                        </div>
                       </div>
-                      {p.note && <small style={{ color: '#94a3b8', fontSize: '12px' }}>{p.note}</small>}
-                    </div>
-                  ))
-                )}
-              </div>
+                    ))
+                  )}
+                </div>
 
-              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                <button onClick={() => { handleDeleteWorker(selectedWorkerForHistory.id, selectedWorkerForHistory.fullname); setSelectedWorkerForHistory(null); }} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Ustanı Sil</button>
-                <button onClick={() => setSelectedWorkerForHistory(null)} style={{ flex: 1, padding: '10px', backgroundColor: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Bağla</button>
+                {/* 2. ÖDƏNİŞ TARIXÇƏSİ */}
+                <h4 style={{ color: '#4ade80', margin: '15px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>💳 Edilən Ödənişlər Tarixçəsi ({wPayments.length})</h4>
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {wPayments.length === 0 ? (
+                    <p style={{ color: '#64748b', fontSize: '13px', margin: '5px 0' }}>Hələ ki bu ustaya ödəniş edilməyib.</p>
+                  ) : (
+                    wPayments.map((p) => (
+                      <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <strong style={{ color: '#4ade80', fontSize: '14px' }}>+{p.amount} AZN</strong>
+                          <div style={{ fontSize: '11px', color: '#64748b' }}>Tarix: {p.date || 'Yoxdur'}</div>
+                        </div>
+                        {p.note && <span style={{ color: '#94a3b8', fontSize: '12px', backgroundColor: '#1e293b', padding: '3px 8px', borderRadius: '4px' }}>{p.note}</span>}
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* DÜYMƏLƏR */}
+                <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                  <button onClick={() => { handleDeleteWorker(currentW.id, currentW.fullname); setSelectedWorkerForHistory(null); }} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Ustanı Sil</button>
+                  <button onClick={() => setSelectedWorkerForHistory(null)} style={{ flex: 1, padding: '10px', backgroundColor: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Bağla</button>
+                </div>
+
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
       </div>
     );
