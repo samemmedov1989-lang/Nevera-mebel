@@ -147,12 +147,10 @@ export default function App() {
       const targetWorker = workers.find(w => w.id === assignWorkerId);
       const currentEarned = Number(targetWorker?.totalEarned) || 0;
       
-      // 1. Ustanın balansı artırılır
       await updateDoc(doc(db, "users", assignWorkerId), {
         totalEarned: currentEarned + Number(assignAmount)
       });
 
-      // 2. İşlərin siyahısına Admin tərəfindən tapşırılmış təsdiqli iş kimi əlavə olunur
       await addDoc(collection(db, "extraJobs"), {
         workerId: assignWorkerId,
         workerName: targetWorker.fullname || targetWorker.name || 'Usta',
@@ -230,7 +228,6 @@ export default function App() {
 
   // 2. USTA EKRANI
   if (role === 'worker') {
-
     if (!activeWorker) {
       return (
         <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
@@ -365,7 +362,6 @@ export default function App() {
 
   // 3. ADMIN EKRANI
   if (role === 'admin') {
-
     if (!isAdminLoggedIn) {
       return (
         <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
