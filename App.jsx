@@ -28,9 +28,15 @@ export default function App() {
   // Form State-ləri
   const [reqAmount, setReqAmount] = useState('');
   const [reqDesc, setReqDesc] = useState('');
+  
+  // Admin: Ödəniş və İş Tapşırığı Form State-ləri
   const [paymentWorkerId, setPaymentWorkerId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentNote, setPaymentNote] = useState('');
+
+  const [assignWorkerId, setAssignWorkerId] = useState('');
+  const [assignAmount, setAssignAmount] = useState('');
+  const [assignTitle, setAssignTitle] = useState('');
 
   useEffect(() => {
     const unsubWorkers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -131,6 +137,39 @@ export default function App() {
     }
   };
 
+  // ADMIN: Ustaya İş / Məbləğ Təyin Etmək (Avtomatik balansına oturur)
+  const handleAssignJob = async (e) => {
+    e.preventDefault();
+    if (!assignWorkerId || !assignAmount || !assignTitle) return alert("Bütün xanaları doldurun!");
+    
+    try {
+      const targetWorker = workers.find(w => w.id === assignWorkerId);
+      const currentEarned = Number(targetWorker?.totalEarned) || 0;
+      
+      // 1. Ustanın balansı artırılır
+      await updateDoc(doc(db, "users", assignWorkerId), {
+        totalEarned: currentEarned + Number(assignAmount)
+      });
+
+      // 2. İşlərin siyahısına təsdiqlənmiş iş kimi qeyd edilir
+      await addDoc(collection(db, "extraJobs"), {
+        workerId: assignWorkerId,
+        workerName: targetWorker.fullname || targetWorker.name || 'Usta',
+        amount: Number(assignAmount),
+        description: assignTitle,
+        status: "approved",
+        date: new Date().toLocaleDateString('az-AZ')
+      });
+
+      setAssignWorkerId('');
+      setAssignAmount('');
+      setAssignTitle('');
+      alert("İş və məbləğ uğurla ustanın balansına əlavə olundu!");
+    } catch (err) {
+      alert("Xəta baş verdi!");
+    }
+  };
+
   // ADMIN: Sorğunu Təsdiqləmək
   const handleApprove = async (req) => {
     try {
@@ -187,7 +226,7 @@ export default function App() {
     );
   }
 
-  // 2. USTA EKRANI (Giriş, Qeydiyyat və Şəxsi Kabinet)
+  // 2. USTA EKRANI
   if (role === 'worker') {
 
     if (!activeWorker) {
@@ -298,9 +337,9 @@ export default function App() {
             )}
           </div>
 
-          <h4>📑 Göndərdiyiniz Sorğular</h4>
+          <h4>📑 İş Tarixçəniz Və Göndərilən Sorğular</h4>
           <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-            {myRequests.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Hələ sorğu göndərməmisiniz.</p> : (
+            {myRequests.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Hələ iş yoxdur.</p> : (
               myRequests.map(r => (
                 <div key={r.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -310,7 +349,7 @@ export default function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px' }}>
                     <span style={{ color: '#64748b' }}>Tarix: {r.date || 'Yoxdur'}</span>
                     <strong style={{ color: r.status === 'approved' ? '#4ade80' : r.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
-                      {r.status === 'approved' ? '✓ Təsdiqləndi' : r.status === 'rejected' ? '✕ Rədd edildi' : '⏳ Gözləyir'}
+                      {r.status === 'approved' ? '✓ Təsdiqləndi / Əlavə Olundu' : r.status === 'rejected' ? '✕ Rədd edildi' : '⏳ Gözləyir'}
                     </strong>
                   </div>
                 </div>
@@ -322,10 +361,9 @@ export default function App() {
     );
   }
 
-  // 3. ADMIN EKRANI (Şifrə Tələbi və Panel)
+  // 3. ADMIN EKRANI
   if (role === 'admin') {
 
-    // Əgər admin hələ şifrəni yazmayıbsa (Admin Giriş Formu)
     if (!isAdminLoggedIn) {
       return (
         <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'sans-serif', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
@@ -354,7 +392,6 @@ export default function App() {
       );
     }
 
-    // Admin Şifrəni Yazdıqdan sonra açılan ADMIN PANALİ:
     const pendingRequests = extraJobs.filter(j => j.status === 'pending');
 
     return (
@@ -364,9 +401,25 @@ export default function App() {
           <button onClick={() => selectRole('select')} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Çıxış</button>
         </div>
 
+        {/* ADMIN: USTAYA İŞ VƏ MƏBLƏĞ YAZMAQ (BALANSA OTURDUR) */}
+        <div style={{ marginTop: '20px' }}>
+          <form onSubmit={handleAssignJob} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '8px', border: '1px solid #0284c7' }}>
+            <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8' }}>➕ Ustaya İş Tapşır (Doğrudan Balansına Yaz)</h4>
+            <select value={assignWorkerId} onChange={e => setAssignWorkerId(e.target.value)} style={inputStyle} required>
+              <option value="">-- Ustanı Seçin --</option>
+              {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
+            </select>
+            <input type="text" placeholder="İşin Təsviri (Məs: Mətbəx mebeli yığılması)" value={assignTitle} onChange={e => setAssignTitle(e.target.value)} style={inputStyle} required />
+            <input type="number" placeholder="Məbləğ (AZN)" value={assignAmount} onChange={e => setAssignAmount(e.target.value)} style={inputStyle} required />
+            <button type="submit" style={{ width: '100%', padding: '10px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+              ➕ İşi Qeyd Et Və Balansa Əlavə Et
+            </button>
+          </form>
+        </div>
+
         {/* GƏLƏN SORĞULAR */}
         <div style={{ marginTop: '20px' }}>
-          <h3 style={{ color: '#f59e0b' }}>📥 Gələn Sorğular ({pendingRequests.length})</h3>
+          <h3 style={{ color: '#f59e0b' }}>📥 Ustaların Göndərdiyi Sorğular ({pendingRequests.length})</h3>
           {pendingRequests.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px' }}>Gözləyən yeni sorğu yoxdur.</p> : (
             pendingRequests.map(req => (
               <div key={req.id} style={{ backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #f59e0b' }}>
@@ -419,7 +472,7 @@ export default function App() {
         {/* ÖDƏNİŞ ET FORMU */}
         <div style={{ marginTop: '25px' }}>
           <form onSubmit={handleAddPayment} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '8px' }}>
-            <h4>💳 Ustaya Ödəniş Et</h4>
+            <h4>💳 Ustaya Ödəniş Et (Verilən Maaş / Avans)</h4>
             <select value={paymentWorkerId} onChange={e => setPaymentWorkerId(e.target.value)} style={inputStyle} required>
               <option value="">-- İşçini Seçin --</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
