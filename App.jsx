@@ -3,24 +3,19 @@ import { db } from './firebase';
 import { 
   collection, 
   onSnapshot, 
-  addDoc, 
   updateDoc, 
   deleteDoc, 
-  doc,
-  serverTimestamp 
+  doc 
 } from 'firebase/firestore';
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null); // 'admin' və ya işçi obyekti
   const [workers, setWorkers] = useState([]);
   const [payments, setPayments] = useState([]);
   const [extraJobs, setExtraJobs] = useState([]);
   
-  // Yeni əlavə olunan state-lər
   const [selectedWorkerForHistory, setSelectedWorkerForHistory] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'workers', 'requests'
+  const [activeTab, setActiveTab] = useState('overview');
 
-  // Firestore-dan real vaxt rejimində məlumatların çəkilməsi
   useEffect(() => {
     const unsubWorkers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setWorkers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -41,7 +36,6 @@ export default function App() {
     };
   }, []);
 
-  // Rədd edilmiş sorğunu silmək (Təmizləmək)
   const handleDeleteRequest = async (requestId) => {
     if (window.confirm("Bu rədd edilmiş sorğunu silmək istədiyinizə əminsiniz?")) {
       try {
@@ -54,10 +48,9 @@ export default function App() {
     }
   };
 
-  // Rədd edilmiş sorğuya düzəliş edib yenidən gözləməyə (pending) qaytarmaq
   const handleEditRequest = async (request) => {
     const newAmount = prompt("Yeni məbləği daxil edin (AZN):", request.amount);
-    if (newAmount === null) return; // İmtina edildikdə
+    if (newAmount === null) return;
     
     const newDesc = prompt("Yeni iş təsvirini daxil edin:", request.description || "");
     if (newDesc === null) return;
@@ -67,8 +60,7 @@ export default function App() {
         await updateDoc(doc(db, "extraJobs", request.id), {
           amount: Number(newAmount),
           description: newDesc,
-          status: "pending", // Yenidən təsdiq gözləyən vəziyyətə keçir
-          updatedAt: serverTimestamp()
+          status: "pending"
         });
         alert("Sorğu düzəldildi və yenidən baxılması üçün gözləməyə keçirildi!");
       } catch (err) {
@@ -81,7 +73,6 @@ export default function App() {
   return (
     <div style={{ backgroundColor: '#0f172a', color: '#f8fafc', minHeight: '100vh', fontFamily: 'sans-serif', padding: '15px' }}>
       
-      {/* BAŞLIQ / PANEL DÜYMƏLƏRİ */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '1px solid #334155' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '20px', color: '#38bdf8' }}>NeVeRa Mebel</h1>
@@ -89,7 +80,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* NAVİQASİYA TABLARI */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', overflowX: 'auto' }}>
         <button 
           onClick={() => setActiveTab('overview')}
@@ -111,7 +101,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* 1. ÜMUMİ NƏZARƏT / İŞÇİLƏR KARTLARI */}
       {(activeTab === 'overview' || activeTab === 'workers') && (
         <div>
           <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '10px' }}>
@@ -166,7 +155,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. RƏDD EDİLMİŞ SORĞULAR VƏ BAXILAN SORĞULAR */}
       {(activeTab === 'overview' || activeTab === 'requests') && (
         <div style={{ marginTop: '30px' }}>
           <h3 style={{ color: '#ef4444', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>Rədd Edilmiş Sorğular (Təmizlə / Düzəlt)</h3>
@@ -204,7 +192,6 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. ÖDƏNİŞ TARİXÇƏSİ MODALI (POPUP) */}
       {selectedWorkerForHistory && (
         <div 
           onClick={() => setSelectedWorkerForHistory(null)}
