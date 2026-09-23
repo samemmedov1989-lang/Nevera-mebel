@@ -62,7 +62,7 @@ export default function App() {
           description: newDesc,
           status: "pending"
         });
-        alert("Sorğu düzəldildi və yenidən baxılması üçün gözləməyə keçirildi!");
+        alert("Sorğu düzəldildi və yenidən gözləmə rejiminə keçirildi!");
       } catch (err) {
         console.error("Düzəliş edilərkən xəta:", err);
         alert("Xəta baş verdi.");
@@ -104,7 +104,7 @@ export default function App() {
       {(activeTab === 'overview' || activeTab === 'workers') && (
         <div>
           <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '10px' }}>
-            💡 Ödəniş tarixçəsini görmək üçün ustanın adına/kartına toxunun.
+            💡 Ödəniş tarixçəsini görmək üçün ustanın kartına toxunun.
           </p>
 
           <div style={{ display: 'grid', gap: '15px' }}>
@@ -157,7 +157,7 @@ export default function App() {
 
       {(activeTab === 'overview' || activeTab === 'requests') && (
         <div style={{ marginTop: '30px' }}>
-          <h3 style={{ color: '#ef4444', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>Rədd Edilmiş Sorğular (Təmizlə / Düzəlt)</h3>
+          <h3 style={{ color: '#ef4444', borderBottom: '1px solid #334155', paddingBottom: '8px' }}>Rədd Edilmiş Sorğular</h3>
           
           {extraJobs.filter(j => j.status === 'rejected').length === 0 ? (
             <p style={{ color: '#64748b', fontSize: '14px' }}>Rədd edilmiş sorğu yoxdur.</p>
@@ -182,7 +182,7 @@ export default function App() {
                       onClick={() => handleDeleteRequest(req.id)}
                       style={{ flex: 1, padding: '6px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
                     >
-                      🗑️ Sil (Təmizlə)
+                      🗑️ Sil
                     </button>
                   </div>
                 </div>
