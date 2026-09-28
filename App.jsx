@@ -398,11 +398,10 @@ export default function App() {
     }
 
     const currentWorkerData = workers.find(w => w.id === activeWorker.id) || activeWorker;
-    const allWorkerPayments = payments.filter(p => p.workerId === activeWorker.id);
+    const allWorkerPayments = payments.filter(p => p.workerId === activeWorker.id || p.userId === activeWorker.id);
     const allWorkerJobsAndRequests = extraJobs.filter(j => j.workerId === activeWorker.id);
     const allWorkerCutting = cuttingServices.filter(c => c.workerId === activeWorker.id);
 
-    // Düzəldilmiş tarix filtri (Bütün köhnə qeydləri dəstəkləyir)
     const dateMatches = (dStr) => {
       if (!dStr) return true;
       if (workerMonthFilter === 'ALL' && workerYearFilter === 'ALL') return true;
@@ -473,7 +472,7 @@ export default function App() {
           <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>📤 Sorğunu Adminə Göndər</button>
         </form>
 
-        {/* XÜSUSİ KƏSİM VƏ MATERIAL XİDMƏTLƏRİ (USTA QAİMƏ ÖDƏNİŞİ VƏ BALANSI) */}
+        {/* XÜSUSİ KƏSİM VƏ MATERIAL XİDMƏTLƏRİ */}
         <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #a855f7' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ color: '#c084fc', margin: 0 }}>🪚 Sexdə Kəsim Və Material Qaimələrim</h3>
@@ -573,7 +572,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* QAİMƏ ÖDƏNİŞ MODALI (USTA ƏMƏLİYYATI) */}
+        {/* QAİMƏ ÖDƏNİŞ MODALI */}
         {selectedCuttingDoc && (() => {
           const total = Number(selectedCuttingDoc.totalAmount) || 0;
           const paid = Number(selectedCuttingDoc.paidAmount) || 0;
@@ -770,7 +769,7 @@ export default function App() {
           <h3>👷 Ustalar Və Hesabatları ({workers.length})</h3>
           <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
             {workers.map(w => {
-              const wPayments = payments.filter(p => p.workerId === w.id);
+              const wPayments = payments.filter(p => p.workerId === w.id || p.userId === w.id);
               const paid = wPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
               const earned = Number(w.totalEarned) || 0;
               const remaining = earned - paid;
@@ -839,11 +838,12 @@ export default function App() {
 
         {/* ADMIN MODAL - USTANIN ƏTRAFLI TARİXÇƏSİ VƏ QAİMƏLƏRİ */}
         {selectedWorkerForHistory && (() => {
-          const wPayments = payments.filter(p => p.workerId === selectedWorkerForHistory.id);
-          const wJobs = extraJobs.filter(j => j.workerId === selectedWorkerForHistory.id);
-          const wCutting = cuttingServices.filter(c => c.workerId === selectedWorkerForHistory.id);
-          
           const currentW = workers.find(w => w.id === selectedWorkerForHistory.id) || selectedWorkerForHistory;
+          
+          // Düzəliş edildi: Hem workerId hem de userId sorgulari desteklenir
+          const wPayments = payments.filter(p => p.workerId === currentW.id || p.userId === currentW.id);
+          const wJobs = extraJobs.filter(j => j.workerId === currentW.id);
+          const wCutting = cuttingServices.filter(c => c.workerId === currentW.id);
 
           const dateMatches = (dStr) => {
             if (!dStr) return true;
@@ -900,7 +900,7 @@ export default function App() {
                 </div>
 
                 {/* ÖDƏNİLƏN MAAŞLAR HESABATI */}
-                <h4 style={{ color: '#4ade80', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>💳 Ödənilən Maaşlar ({filteredWPayments.length})</h4>
+                <h4 style={{ color: '#4ade80', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>💳 Ustaya Ödənilən Maaşlar ({filteredWPayments.length})</h4>
                 <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'grid', gap: '6px', marginBottom: '15px' }}>
                   {filteredWPayments.length === 0 ? <p style={{ color: '#64748b', fontSize: '13px' }}>Maaş ödənişi yoxdur.</p> : (
                     filteredWPayments.map(p => (
@@ -915,7 +915,7 @@ export default function App() {
                   )}
                 </div>
 
-                {/* QAİMƏ VƏ KƏSİM XİDMƏTLƏRİ */}
+                {/* QAİMƏ VƏ KƏSİM XİDMƏTLƏRİ VƏ BURA ƏLAVƏ EDİLƏN ÖDƏNİŞLƏR */}
                 <h4 style={{ color: '#c084fc', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🪚 Sexdə Kəsim Və Material Qaimələri</h4>
                 <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px' }}>
                   {filteredWCutting.length === 0 ? <p style={{ color: '#64748b', fontSize: '13px' }}>Kəsim qeydi yoxdur.</p> : (
