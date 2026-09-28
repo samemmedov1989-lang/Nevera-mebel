@@ -8,6 +8,7 @@ export default function App() {
   const [payments, setPayments] = useState([]);
   const [extraJobs, setExtraJobs] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [cuttingServices, setCuttingServices] = useState([]); // KƏSİM XİDMƏTİ ÜÇÜN
 
   // Admin Giriş State-ləri
   const [adminPinInput, setAdminPinInput] = useState('');
@@ -23,10 +24,10 @@ export default function App() {
   const [regPin, setRegPin] = useState('');
   const [activeWorker, setActiveWorker] = useState(null); 
 
-  // USTA PANELİ ÜÇÜN AY FİLTRİ (7-Cİ İSTƏK)
+  // Usta Paneli Ay Filtri
   const [workerMonthFilter, setWorkerMonthFilter] = useState('ALL');
 
-  // Admin Modal (Tarixçə pəncərəsi)
+  // Admin Modal
   const [selectedWorkerForHistory, setSelectedWorkerForHistory] = useState(null);
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('ALL');
 
@@ -48,6 +49,16 @@ export default function App() {
   const [supPaid, setSupPaid] = useState('');
   const [supNote, setSupNote] = useState('');
 
+  // KƏSİM VƏ MATERIAL FORM STATE-LƏRİ
+  const [cutWorkerId, setCutWorkerId] = useState('');
+  const [cutMatType, setCutMatType] = useState('Laminat/DVP');
+  const [cutMatColor, setCutMatColor] = useState('');
+  const [cutMatCount, setCutMatCount] = useState('');
+  const [cutMatPrice, setCutMatPrice] = useState('');
+  const [cutPvcMeters, setCutPvcMeters] = useState('');
+  const [cutPvcPrice, setCutPvcPrice] = useState('0.90');
+  const [cutTransferFee, setCutTransferFee] = useState('');
+
   // Rapor / Hesabat Filtr State-ləri (Admin)
   const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportMonth, setReportMonth] = useState('ALL');
@@ -65,7 +76,10 @@ export default function App() {
     const unsubSuppliers = onSnapshot(collection(db, 'suppliers'), (snapshot) => {
       setSuppliers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    return () => { unsubWorkers(); unsubPayments(); unsubExtra(); unsubSuppliers(); };
+    const unsubCutting = onSnapshot(collection(db, 'cuttingServices'), (snapshot) => {
+      setCuttingServices(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsubWorkers(); unsubPayments(); unsubExtra(); unsubSuppliers(); unsubCutting(); };
   }, []);
 
   const selectRole = (r) => {
@@ -144,26 +158,21 @@ export default function App() {
         date: today.toLocaleDateString('az-AZ'),
         isoDate: today.toISOString()
       });
-      setReqAmount('');
-      setReqDesc('');
-      alert("Sorğunuz göndərildi! Admin təsdiqlədikdən sonra balansınıza əlavə olunacaq.");
+      setReqAmount(''); setReqDesc('');
+      alert("Sorğunuz göndərildi!");
     } catch (err) { alert("Xəta baş verdi."); }
   };
 
-  // ADMIN: USTAYA İŞ TAPŞIRMAQ VƏ QİYMƏT TƏYİN ETMƏK
+  // ADMIN: USTAYA İŞ TAPŞIRMAQ
   const handleAssignJob = async (e) => {
     e.preventDefault();
     if (!assignWorkerId || !assignAmount || !assignTitle) return alert("Bütün xanaları doldurun!");
-    
     try {
       const targetWorker = workers.find(w => w.id === assignWorkerId);
       const currentEarned = Number(targetWorker?.totalEarned) || 0;
       const today = new Date();
 
-      await updateDoc(doc(db, "users", assignWorkerId), {
-        totalEarned: currentEarned + Number(assignAmount)
-      });
-
+      await updateDoc(doc(db, "users", assignWorkerId), { totalEarned: currentEarned + Number(assignAmount) });
       await addDoc(collection(db, "extraJobs"), {
         workerId: assignWorkerId,
         workerName: targetWorker.fullname || targetWorker.name || 'Usta',
@@ -180,23 +189,59 @@ export default function App() {
     } catch (err) { alert("Xəta baş verdi!"); }
   };
 
-  // ADMIN: Sorğunu Təsdiqləmək
+  // KƏSİM VƏ MATERIAL ƏLAVƏ ETMƏK (ADMIN)
+  const handleAddCuttingService = async (e) => {
+    e.preventDefault();
+    if (!cutWorkerId) return alert("Ustanı seçin!");
+
+    const matTotal = (Number(cutMatCount) || 0) * (Number(cutMatPrice) || 0);
+    const pvcTotal = (Number(cutPvcMeters) || 0) * (Number(cutPvcPrice) || 0);
+    const transTotal = Number(cutTransferFee) || 0;
+    const grandTotal = matTotal + pvcTotal + transTotal;
+
+    if (grandTotal <= 0) return alert("Ən azı bir məbləğ hesablanmalıdır!");
+
+    const targetWorker = workers.find(w => w.id === cutWorkerId);
+    const today = new Date();
+
+    try {
+      await addDoc(collection(db, "cuttingServices"), {
+        workerId: cutWorkerId,
+        workerName: targetWorker?.fullname || targetWorker?.name || 'Usta',
+        materialType: cutMatType,
+        color: cutMatColor,
+        matCount: Number(cutMatCount) || 0,
+        matPrice: Number(cutMatPrice) || 0,
+        matTotal: matTotal,
+        pvcMeters: Number(cutPvcMeters) || 0,
+        pvcPrice: Number(cutPvcPrice) || 0,
+        pvcTotal: pvcTotal,
+        transferFee: transTotal,
+        totalAmount: grandTotal,
+        date: today.toLocaleDateString('az-AZ'),
+        isoDate: today.toISOString()
+      });
+
+      setCutWorkerId(''); setCutMatColor(''); setCutMatCount(''); setCutMatPrice('');
+      setCutPvcMeters(''); setCutPvcPrice('0.90'); setCutTransferFee('');
+      alert("Kəsim və material xidməti ustanın xüsusi hesabına əlavə edildi!");
+    } catch (err) { alert("Xəta baş verdi!"); }
+  };
+
   const handleApprove = async (req) => {
     try {
       const worker = workers.find(w => w.id === req.workerId);
       const currentEarned = Number(worker?.totalEarned) || 0;
       await updateDoc(doc(db, "users", req.workerId), { totalEarned: currentEarned + Number(req.amount) });
       await updateDoc(doc(db, "extraJobs", req.id), { status: "approved" });
-      alert("Sorğu təsdiqləndi və məbləğ ustanın qazancına əlavə olunub!");
+      alert("Sorğu təsdiqləndi!");
     } catch (err) { alert("Xəta baş verdi!"); }
   };
 
-  // ADMIN: Sorğunu Rədd Etmək
   const handleReject = async (id) => {
     await updateDoc(doc(db, "extraJobs", id), { status: "rejected" });
   };
 
-  // ADMIN: Ödəniş Etmək
   const handleAddPayment = async (e) => {
     e.preventDefault();
     if (!paymentWorkerId || !paymentAmount) return alert("İşçini və məbləği daxil edin!");
@@ -212,7 +257,6 @@ export default function App() {
     alert("Ödəniş qeydə alındı!");
   };
 
-  // ADMIN: Təchizatçı Qeydi
   const handleAddSupplier = async (e) => {
     e.preventDefault();
     if (!supName || !supAmount) return alert("Ad və Ümumi Alış məbləğini daxil edin!");
@@ -226,10 +270,9 @@ export default function App() {
       isoDate: today.toISOString()
     });
     setSupName(''); setSupAmount(''); setSupPaid(''); setSupNote('');
-    alert("Təchizatçı borcu/alışı qeydə alındı!");
+    alert("Təchizatçı qeydə alındı!");
   };
 
-  // 6. ƏN ƏSAS: Ustanı Silməkdə Admin Parolu Tələbi
   const handleDeleteWorker = async (workerId, name) => {
     const enteredPin = prompt(`⚠️ DIQQƏT: "${name}" usta və onun BÜTÜN hesabatı silinəcək!\n\nTəsdiqləmək üçün Admin PIN şifrəsini girin:`);
     if (enteredPin === null) return; 
@@ -238,13 +281,13 @@ export default function App() {
       alert(`${name} uğurla silindi.`);
       setSelectedWorkerForHistory(null);
     } else {
-      alert("❌ Yanlış Admin şifrəsi! Silmə əməliyyatı ləğv edildi.");
+      alert("❌ Yanlış Admin şifrəsi!");
     }
   };
 
   const inputStyle = { width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #334155', backgroundColor: '#0f172a', color: '#fff', marginBottom: '12px', boxSizing: 'border-box' };
 
-  // XÜLASƏ / HESABAT HESABLAMALARI (ADMIN ÜÇÜN)
+  // XÜLASƏ HESABLAMALARI
   const totalEarnedAllWorkers = workers.reduce((s, w) => s + (Number(w.totalEarned) || 0), 0);
   const totalPaidAllWorkers = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
   const totalWorkerRemaining = totalEarnedAllWorkers - totalPaidAllWorkers;
@@ -252,6 +295,8 @@ export default function App() {
   const totalSupplierAmount = suppliers.reduce((s, sup) => s + (Number(sup.totalAmount) || 0), 0);
   const totalSupplierPaid = suppliers.reduce((s, sup) => s + (Number(sup.paidAmount) || 0), 0);
   const totalSupplierRemaining = totalSupplierAmount - totalSupplierPaid;
+
+  const totalCuttingAllTime = cuttingServices.reduce((s, c) => s + (Number(c.totalAmount) || 0), 0);
 
   // 1. SEÇİM EKRANI
   if (role === 'select') {
@@ -290,9 +335,7 @@ export default function App() {
                 <input type="tel" placeholder="Məs: 0501234567" value={regPhone} onChange={e => setRegPhone(e.target.value)} style={inputStyle} required />
                 <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Özünüzə Şifrə Təyin Edin (PIN):</label>
                 <input type="password" placeholder="Məs: 1234" value={regPin} onChange={e => setRegPin(e.target.value)} style={inputStyle} required />
-                <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>
-                  Qeydiyyatı Tamamla
-                </button>
+                <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>Qeydiyyatı Tamamla</button>
                 <p style={{ textAlign: 'center', fontSize: '13px', color: '#94a3b8', marginTop: '15px' }}>
                   Artıq hesabınız var? <span onClick={() => setIsRegistering(false)} style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline' }}>Giriş edin</span>
                 </p>
@@ -303,9 +346,7 @@ export default function App() {
                 <input type="tel" placeholder="Məs: 0501234567" value={loginPhone} onChange={e => setLoginPhone(e.target.value)} style={inputStyle} required />
                 <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Şifrəniz (PIN):</label>
                 <input type="password" placeholder="Şifrənizi daxil edin" value={loginPin} onChange={e => setLoginPin(e.target.value)} style={inputStyle} required />
-                <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>
-                  Hesaba Daxil Ol
-                </button>
+                <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>Hesaba Daxil Ol</button>
                 <p style={{ textAlign: 'center', fontSize: '13px', color: '#94a3b8', marginTop: '15px' }}>
                   Hesabınız yoxdur? <span onClick={() => setIsRegistering(true)} style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline' }}>Qeydiyyatdan keçin</span>
                 </p>
@@ -319,30 +360,18 @@ export default function App() {
     const currentWorkerData = workers.find(w => w.id === activeWorker.id) || activeWorker;
     const allWorkerPayments = payments.filter(p => p.workerId === activeWorker.id);
     const allWorkerJobsAndRequests = extraJobs.filter(j => j.workerId === activeWorker.id);
+    const allWorkerCutting = cuttingServices.filter(c => c.workerId === activeWorker.id);
 
-    // USTA PANELİ ÜÇÜN AY FİLTRASIYASI (7-Cİ İSTƏK)
-    const filteredWorkerJobs = allWorkerJobsAndRequests.filter(j => {
-      if (workerMonthFilter === 'ALL') return true;
-      if (!j.date) return true;
-      const parts = j.date.split('.');
-      return parts.length >= 2 && parts[1] === workerMonthFilter;
-    });
+    // Ay Filtri
+    const filteredWorkerJobs = allWorkerJobsAndRequests.filter(j => workerMonthFilter === 'ALL' || (j.date && j.date.split('.')[1] === workerMonthFilter));
+    const filteredWorkerPayments = allWorkerPayments.filter(p => workerMonthFilter === 'ALL' || (p.date && p.date.split('.')[1] === workerMonthFilter));
+    const filteredWorkerCutting = allWorkerCutting.filter(c => workerMonthFilter === 'ALL' || (c.date && c.date.split('.')[1] === workerMonthFilter));
 
-    const filteredWorkerPayments = allWorkerPayments.filter(p => {
-      if (workerMonthFilter === 'ALL') return true;
-      if (!p.date) return true;
-      const parts = p.date.split('.');
-      return parts.length >= 2 && parts[1] === workerMonthFilter;
-    });
-
-    // AYlıq və ya Ümumi Hesablamalar
-    const totalEarnedFiltered = filteredWorkerJobs.filter(j => j.status === 'approved' || j.assignedByAdmin).reduce((s, j) => s + (Number(j.amount) || 0), 0);
-    const totalPaidFiltered = filteredWorkerPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    
-    // Bütöv Ümumi Hesablama
     const totalEarnedAllTime = Number(currentWorkerData?.totalEarned) || 0;
     const totalPaidAllTime = allWorkerPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
     const remainingAllTime = totalEarnedAllTime - totalPaidAllTime;
+
+    const totalCuttingFiltered = filteredWorkerCutting.reduce((s, c) => s + (Number(c.totalAmount) || 0), 0);
 
     return (
       <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '15px', fontFamily: 'sans-serif' }}>
@@ -354,11 +383,9 @@ export default function App() {
           <button onClick={() => setActiveWorker(null)} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Çıxış Et</button>
         </div>
 
-        {/* 7-Cİ İSTƏK: USTA ÜÇÜN AY SEÇİMİ / FİLTRİ */}
+        {/* AY FİLTRİ */}
         <div style={{ marginTop: '15px', backgroundColor: '#1e293b', padding: '12px', borderRadius: '10px', border: '1px solid #38bdf8' }}>
-          <label style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>
-            📅 Hesabatı Aya Göre Filtrlə (Kateqoriya):
-          </label>
+          <label style={{ fontSize: '13px', color: '#38bdf8', fontWeight: 'bold', display: 'block', marginBottom: '6px' }}>📅 Hesabatı Aya Göre Filtrlə:</label>
           <select value={workerMonthFilter} onChange={e => setWorkerMonthFilter(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
             <option value="ALL">Bütün Aylar (Ümumi Arxiv)</option>
             <option value="01">Yanvar (01)</option>
@@ -380,72 +407,83 @@ export default function App() {
           <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>📝 Görülən İş Barədə Sorğu Göndər</h3>
           <input type="number" placeholder="Görülən işin məbləği (AZN)" value={reqAmount} onChange={e => setReqAmount(e.target.value)} style={inputStyle} required />
           <input type="text" placeholder="İşin təsviri (Məs: Mətbəx mebeli yığıldı)" value={reqDesc} onChange={e => setReqDesc(e.target.value)} style={inputStyle} required />
-          <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-            📤 Sorğunu Adminə Göndər
-          </button>
+          <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>📤 Sorğunu Adminə Göndər</button>
         </form>
 
-        <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <h3 style={{ color: '#38bdf8', marginTop: 0 }}>📊 Şəxsi Hesabım {workerMonthFilter !== 'ALL' && `(${workerMonthFilter}-ci ay)`}</h3>
-          
-          {workerMonthFilter === 'ALL' ? (
-            <div style={{ display: 'grid', gap: '8px', borderBottom: '1px dashed #334155', paddingBottom: '12px', marginBottom: '15px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Ümumi Qazanılan Məbləğ:</span>
-                <strong style={{ color: '#38bdf8' }}>{totalEarnedAllTime} AZN</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Sizə Ödənilən Ümumi:</span>
-                <strong style={{ color: '#4ade80' }}>{totalPaidAllTime} AZN</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px' }}>
-                <span>Qalan Alacağınız:</span>
-                <strong style={{ color: remainingAllTime > 0 ? '#f43f5e' : '#4ade80' }}>{remainingAllTime} AZN</strong>
-              </div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gap: '8px', borderBottom: '1px dashed #334155', paddingBottom: '12px', marginBottom: '15px', backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Seçilən Ayda Qazanc:</span>
-                <strong style={{ color: '#38bdf8' }}>{totalEarnedFiltered} AZN</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#94a3b8' }}>Seçilən Ayda Alınan Ödəniş:</span>
-                <strong style={{ color: '#4ade80' }}>{totalPaidFiltered} AZN</strong>
-              </div>
-            </div>
-          )}
+        {/* XÜSUSİ KƏSİM VƏ MATERIAL XİDMƏTLƏRİ (USTA PANELİNDƏ AYRICA) */}
+        <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #a855f7' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ color: '#c084fc', margin: 0 }}>🪚 Sexdə Kəsim Və Material Xidmətlərim</h3>
+            <span style={{ fontSize: '12px', color: '#e9d5ff', fontWeight: 'bold', backgroundColor: '#581c87', padding: '4px 8px', borderRadius: '6px' }}>
+              Cəm: {totalCuttingFiltered} AZN
+            </span>
+          </div>
+          <p style={{ fontSize: '11px', color: '#94a3b8', margin: '6px 0 12px 0' }}>* Bu bölmədəki xərclər sizin mebel yığımı maaşınızdan tamamilə ayrı tutulur.</p>
 
-          <h4>💳 Sizə Edilən Ödəniş Tarixçəsi</h4>
-          <div style={{ maxHeight: '180px', overflowY: 'auto', marginBottom: '20px' }}>
-            {filteredWorkerPayments.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Seçilən dövrdə ödəniş yoxdur.</p> : (
-              filteredWorkerPayments.map(p => (
-                <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{p.amount} AZN</span>
-                  <small style={{ color: '#94a3b8' }}>{p.date} {p.note ? `(${p.note})` : ''}</small>
+          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+            {filteredWorkerCutting.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Kəsim xidməti qeydı yoxdur.</p> : (
+              filteredWorkerCutting.map(c => (
+                <div key={c.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', marginBottom: '8px', borderLeft: '4px solid #c084fc' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', fontWeight: 'bold', color: '#e9d5ff' }}>
+                    <span>{c.materialType} {c.color ? `(${c.color})` : ''}</span>
+                    <span style={{ color: '#a855f7' }}>{c.totalAmount} AZN</span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                    {c.matCount > 0 && <div>• Material: {c.matCount} ədəd x {c.matPrice} AZN = {c.matTotal} AZN</div>}
+                    {c.pvcMeters > 0 && <div>• PVC: {c.pvcMeters} metr x {c.pvcPrice} AZN = {c.pvcTotal} AZN</div>}
+                    {c.transferFee > 0 && <div>• Transfer/Daşınma: {c.transferFee} AZN</div>}
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '11px', color: '#64748b', marginTop: '4px' }}>Tarix: {c.date}</div>
                 </div>
               ))
             )}
           </div>
+        </div>
 
-          <h4>📋 Mənə Tapşırılan İşlər və Sorğular</h4>
-          <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
-            {filteredWorkerJobs.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Seçilən dövrdə iş və ya sorğu yoxdur.</p> : (
-              filteredWorkerJobs.map(r => (
-                <div key={r.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px', borderLeft: r.assignedByAdmin ? '3px solid #38bdf8' : 'none' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <strong>{r.description}</strong>
-                    <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{r.amount} AZN</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px' }}>
-                    <span style={{ color: '#64748b' }}>Tarix: {r.date || 'Yoxdur'}</span>
-                    <strong style={{ color: r.assignedByAdmin ? '#38bdf8' : r.status === 'approved' ? '#4ade80' : r.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
-                      {r.assignedByAdmin ? '👑 Admin Tapşırığı' : r.status === 'approved' ? '✓ Təsdiqləndi' : r.status === 'rejected' ? '✕ Rədd edildi' : '⏳ Gözləyir'}
-                    </strong>
-                  </div>
+        {/* NORMAL MAAŞ / İŞ HESABATI */}
+        <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <h3 style={{ color: '#38bdf8', marginTop: 0 }}>📊 Normal Mebel İşləri Və Maaş Hesabım</h3>
+          <div style={{ display: 'grid', gap: '8px', borderBottom: '1px dashed #334155', paddingBottom: '12px', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Ümumi Qazanılan:</span>
+              <strong style={{ color: '#38bdf8' }}>{totalEarnedAllTime} AZN</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: '#94a3b8' }}>Ödənilən Maaş:</span>
+              <strong style={{ color: '#4ade80' }}>{totalPaidAllTime} AZN</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px' }}>
+              <span>Qalan Alacaq:</span>
+              <strong style={{ color: remainingAllTime > 0 ? '#f43f5e' : '#4ade80' }}>{remainingAllTime} AZN</strong>
+            </div>
+          </div>
+
+          <h4>💳 Ödəniş Tarixçəsi</h4>
+          <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '15px' }}>
+            {filteredWorkerPayments.map(p => (
+              <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{p.amount} AZN</span>
+                <small style={{ color: '#94a3b8' }}>{p.date} {p.note ? `(${p.note})` : ''}</small>
+              </div>
+            ))}
+          </div>
+
+          <h4>📋 Görülən İşlər Və Sorğular</h4>
+          <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
+            {filteredWorkerJobs.map(r => (
+              <div key={r.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <strong>{r.description}</strong>
+                  <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{r.amount} AZN</span>
                 </div>
-              ))
-            )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px' }}>
+                  <span style={{ color: '#64748b' }}>Tarix: {r.date}</span>
+                  <strong style={{ color: r.assignedByAdmin ? '#38bdf8' : r.status === 'approved' ? '#4ade80' : '#f59e0b' }}>
+                    {r.assignedByAdmin ? '👑 Admin Tapşırığı' : r.status === 'approved' ? '✓ Təsdiqləndi' : '⏳ Gözləyir'}
+                  </strong>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -465,39 +503,12 @@ export default function App() {
             <label style={{ fontSize: '13px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Admin Şifrəsini Girin:</label>
             <input type="password" placeholder="Şifrə" value={adminPinInput} onChange={e => setAdminPinInput(e.target.value)} style={inputStyle} required />
             <button type="submit" style={{ width: '100%', padding: '14px', backgroundColor: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' }}>Panələ Daxil Ol</button>
-            <p style={{ fontSize: '11px', color: '#64748b', marginTop: '12px', textAlign: 'center' }}>* İlkin admin şifrəsi: 9999</p>
           </form>
         </div>
       );
     }
 
     const pendingRequests = extraJobs.filter(j => j.status === 'pending');
-
-    // FILTRLI RAPOR HESABLAMASI (ADMIN)
-    const filteredJobs = extraJobs.filter(j => {
-      if (!j.date) return true;
-      const parts = j.date.split('.'); 
-      if (parts.length < 3) return true;
-      const month = parts[1];
-      const year = parts[2];
-      const matchYear = reportYear === 'ALL' || year === reportYear;
-      const matchMonth = reportMonth === 'ALL' || month === reportMonth;
-      return matchYear && matchMonth;
-    });
-
-    const filteredPayments = payments.filter(p => {
-      if (!p.date) return true;
-      const parts = p.date.split('.');
-      if (parts.length < 3) return true;
-      const month = parts[1];
-      const year = parts[2];
-      const matchYear = reportYear === 'ALL' || year === reportYear;
-      const matchMonth = reportMonth === 'ALL' || month === reportMonth;
-      return matchYear && matchMonth;
-    });
-
-    const reportJobsTotal = filteredJobs.filter(j => j.status === 'approved' || j.assignedByAdmin).reduce((s, j) => s + (Number(j.amount) || 0), 0);
-    const reportPaymentsTotal = filteredPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
 
     return (
       <div style={{ backgroundColor: '#0f172a', color: '#fff', minHeight: '100vh', padding: '15px', fontFamily: 'sans-serif' }}>
@@ -506,105 +517,132 @@ export default function App() {
           <button onClick={() => selectRole('select')} style={{ backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Çıxış</button>
         </div>
 
-        {/* 2 & 4. USTA VƏ TƏCHİZATÇILARIN ÜMUMİ VERƏCƏKLƏRİ & QALIQLARI (ÜMUMİ HESABAT) */}
+        {/* MALIYYƏ HESABATI VƏ BORCLAR */}
         <div style={{ marginTop: '15px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #38bdf8' }}>
-          <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '16px' }}>🌐 Ümumi Maliyyə Hesabatı və Borclar</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+          <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '16px' }}>🌐 Ümumi Maliyyə Hesabatı Və Borclar</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #38bdf8' }}>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>🔨 Ustaların Toplam Qazancı:</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>🔨 Ustaların Toplam Maaşı:</span>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#38bdf8' }}>{totalEarnedAllWorkers} AZN</div>
               <small style={{ color: '#64748b' }}>Ödənilib: {totalPaidAllWorkers} AZN</small>
-              <div style={{ marginTop: '4px', color: totalWorkerRemaining > 0 ? '#f43f5e' : '#4ade80', fontWeight: 'bold', fontSize: '13px' }}>
+              <div style={{ marginTop: '4px', color: totalWorkerRemaining > 0 ? '#f43f5e' : '#4ade80', fontWeight: 'bold', fontSize: '12px' }}>
                 Qalan Borc: {totalWorkerRemaining} AZN
               </div>
             </div>
 
+            <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #a855f7' }}>
+              <span style={{ fontSize: '12px', color: '#e9d5ff' }}>🪚 Sexdə Kəsim Və Material:</span>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#c084fc' }}>{totalCuttingAllTime} AZN</div>
+              <small style={{ color: '#94a3b8' }}>Ayrılıqda Xidmət Borcu</small>
+            </div>
+
             <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', borderLeft: '4px solid #f59e0b' }}>
-              <span style={{ fontSize: '12px', color: '#94a3b8' }}>📦 Təchizatçılara Toplam Borc:</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8' }}>📦 Təchizatçılara Borc:</span>
               <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#f59e0b' }}>{totalSupplierAmount} AZN</div>
               <small style={{ color: '#64748b' }}>Ödənilib: {totalSupplierPaid} AZN</small>
-              <div style={{ marginTop: '4px', color: totalSupplierRemaining > 0 ? '#f43f5e' : '#4ade80', fontWeight: 'bold', fontSize: '13px' }}>
+              <div style={{ marginTop: '4px', color: totalSupplierRemaining > 0 ? '#f43f5e' : '#4ade80', fontWeight: 'bold', fontSize: '12px' }}>
                 Qalan Borc: {totalSupplierRemaining} AZN
               </div>
             </div>
           </div>
         </div>
 
-        {/* 3. İLLİK VƏ AYLIQ FİLTRLİ RAPOR BÖLMƏSİ */}
-        <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <h3 style={{ margin: '0 0 10px 0', color: '#f59e0b', fontSize: '16px' }}>📅 Dövrü Hesabat Raporu (Filtr)</h3>
-          <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
-            <select value={reportYear} onChange={e => setReportYear(e.target.value)} style={{ ...inputStyle, marginBottom: 0, flex: 1 }}>
-              <option value="ALL">Bütün İllər</option>
-              <option value="2024">2024</option>
-              <option value="2025">2025</option>
-              <option value="2026">2026</option>
-            </select>
-            <select value={reportMonth} onChange={e => setReportMonth(e.target.value)} style={{ ...inputStyle, marginBottom: 0, flex: 1 }}>
-              <option value="ALL">Bütün Aylar</option>
-              <option value="01">Yanvar (01)</option>
-              <option value="02">Fevral (02)</option>
-              <option value="03">Mart (03)</option>
-              <option value="04">Aprel (04)</option>
-              <option value="05">May (05)</option>
-              <option value="06">İyun (06)</option>
-              <option value="07">İyul (07)</option>
-              <option value="08">Avqust (08)</option>
-              <option value="09">Sentyabr (09)</option>
-              <option value="10">Oktyabr (10)</option>
-              <option value="11">Noyabr (11)</option>
-              <option value="12">Dekabr (12)</option>
-            </select>
-          </div>
-          <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', display: 'flex', justifyContent: 'space-around', fontSize: '13px' }}>
-            <div>Seçilən Dövrdə Görülən İşlər: <strong style={{ color: '#38bdf8' }}>{reportJobsTotal} AZN</strong></div>
-            <div>Seçilən Dövrdə Verilən Ödəniş: <strong style={{ color: '#4ade80' }}>{reportPaymentsTotal} AZN</strong></div>
-          </div>
-        </div>
-
-        {/* ADMIN: USTAYA İŞ VƏ MƏBLƏĞ TƏYİN ETMƏK */}
-        <div style={{ marginTop: '20px' }}>
-          <form onSubmit={handleAssignJob} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #0284c7' }}>
-            <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '16px' }}>➕ Ustaya İş Tapşır (İş və Qiymət Təyin Et)</h3>
-            <select value={assignWorkerId} onChange={e => setAssignWorkerId(e.target.value)} style={{ ...inputStyle, maxHeight: '150px' }} required>
-              <option value="">-- Ustanı Seçin ({workers.length} Usta) --</option>
+        {/* XÜSUSİ KƏSİM VƏ MATERIAL ƏLAVƏ ETMƏK FORMU (ADMIN) */}
+        <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #a855f7' }}>
+          <h3 style={{ margin: '0 0 10px 0', color: '#c084fc', fontSize: '16px' }}>🪚 Ustaya Sex Kəsim Və Material Xidməti Yaz</h3>
+          <form onSubmit={handleAddCuttingService}>
+            <select value={cutWorkerId} onChange={e => setCutWorkerId(e.target.value)} style={inputStyle} required>
+              <option value="">-- Ustanı Seçin --</option>
               {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
             </select>
-            <input type="text" placeholder="İşin Adı / Təsviri (Məs: Mətbəx mebeli yığılması)" value={assignTitle} onChange={e => setAssignTitle(e.target.value)} style={inputStyle} required />
-            <input type="number" placeholder="Təyin olunan Qiymət (AZN)" value={assignAmount} onChange={e => setAssignAmount(e.target.value)} style={inputStyle} required />
-            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
-              📌 İşi Tapşır Və Balansa Əlavə Et
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>Material Növü:</label>
+                <select value={cutMatType} onChange={e => setCutMatType(e.target.value)} style={inputStyle}>
+                  <option value="Laminat/DVP">Laminat / DVP</option>
+                  <option value="AGT Panel">AGT Panel</option>
+                  <option value="Arxalıq">Arxalıq</option>
+                  <option value="Xüsusi Kəsim">Diğər Kəsim</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>Material Rəngi / Kodu:</label>
+                <input type="text" placeholder="Örn: Ağ, Qoz 102" value={cutMatColor} onChange={e => setCutMatColor(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>Material Sayı (Ədəd):</label>
+                <input type="number" placeholder="Sayı" value={cutMatCount} onChange={e => setCutMatCount(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>1 Ədədin Qiyməti (AZN):</label>
+                <input type="number" placeholder="Qiymət" value={cutMatPrice} onChange={e => setCutMatPrice(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>PVC Metrajı (Metr):</label>
+                <input type="number" placeholder="Məs: 50 metr" value={cutPvcMeters} onChange={e => setCutPvcMeters(e.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label style={{ fontSize: '11px', color: '#94a3b8' }}>1 Metr PVC (AZN):</label>
+                <input type="number" step="0.01" placeholder="0.90" value={cutPvcPrice} onChange={e => setCutPvcPrice(e.target.value)} style={inputStyle} />
+              </div>
+            </div>
+
+            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Transfer / Daşınma Xərci (AZN):</label>
+            <input type="number" placeholder="Məs: 15 AZN" value={cutTransferFee} onChange={e => setCutTransferFee(e.target.value)} style={inputStyle} />
+
+            <div style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '8px', marginBottom: '12px', fontSize: '14px', textAlign: 'right', color: '#c084fc', fontWeight: 'bold' }}>
+              Avtomatik Toplam: {((Number(cutMatCount)||0)*(Number(cutMatPrice)||0)) + ((Number(cutPvcMeters)||0)*(Number(cutPvcPrice)||0)) + (Number(cutTransferFee)||0)} AZN
+            </div>
+
+            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#9333ea', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>
+              💾 Ustanın Sex Hesabına Əlavə Et
             </button>
+          </form>
+        </div>
+
+        {/* USTAYA İŞ TAPŞIRMAQ */}
+        <div style={{ marginTop: '20px' }}>
+          <form onSubmit={handleAssignJob} style={{ backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #0284c7' }}>
+            <h3 style={{ margin: '0 0 12px 0', color: '#38bdf8', fontSize: '16px' }}>➕ Ustaya Mebel Yığımı İş Tapşır</h3>
+            <select value={assignWorkerId} onChange={e => setAssignWorkerId(e.target.value)} style={inputStyle} required>
+              <option value="">-- Ustanı Seçin --</option>
+              {workers.map(w => <option key={w.id} value={w.id}>{w.fullname || w.name} ({w.phone})</option>)}
+            </select>
+            <input type="text" placeholder="İşin Adı (Məs: Mətbəx mebeli)" value={assignTitle} onChange={e => setAssignTitle(e.target.value)} style={inputStyle} required />
+            <input type="number" placeholder="Təyin olunan Maaş (AZN)" value={assignAmount} onChange={e => setAssignAmount(e.target.value)} style={inputStyle} required />
+            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#0284c7', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>📌 İşi Tapşır</button>
           </form>
         </div>
 
         {/* GƏLƏN SORĞULAR */}
         <div style={{ marginTop: '20px' }}>
-          <h3 style={{ color: '#f59e0b' }}>📥 Ustaların Göndərdiyi Sorğular ({pendingRequests.length})</h3>
-          {pendingRequests.length === 0 ? <p style={{ color: '#64748b', fontSize: '14px' }}>Gözləyən yeni sorğu yoxdur.</p> : (
-            pendingRequests.map(req => (
-              <div key={req.id} style={{ backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #f59e0b' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <strong style={{ color: '#38bdf8' }}>{req.workerName}</strong>
-                  <span style={{ color: '#4ade80', fontWeight: 'bold' }}>{req.amount} AZN</span>
-                </div>
-                <p style={{ margin: '5px 0', fontSize: '14px' }}>{req.description}</p>
-                <small style={{ color: '#64748b' }}>Tarix: {req.date}</small>
-                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
-                  <button onClick={() => handleApprove(req)} style={{ flex: 1, padding: '8px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✓ Təsdiqlə</button>
-                  <button onClick={() => handleReject(req.id)} style={{ flex: 1, padding: '8px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕ Rədd et</button>
-                </div>
+          <h3 style={{ color: '#f59e0b' }}>📥 Ustaların Sorğuları ({pendingRequests.length})</h3>
+          {pendingRequests.map(req => (
+            <div key={req.id} style={{ backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', marginBottom: '10px', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <strong style={{ color: '#38bdf8' }}>{req.workerName}</strong>
+                <span style={{ color: '#4ade80', fontWeight: 'bold' }}>{req.amount} AZN</span>
               </div>
-            ))
-          )}
+              <p style={{ margin: '5px 0', fontSize: '14px' }}>{req.description}</p>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                <button onClick={() => handleApprove(req)} style={{ flex: 1, padding: '8px', backgroundColor: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✓ Təsdiqlə</button>
+                <button onClick={() => handleReject(req.id)} style={{ flex: 1, padding: '8px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>✕ Rədd et</button>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* 1. İŞÇİLƏRİN HESABI VƏ TARİXÇƏSİ (SKROLLİ SİYAHI) */}
+        {/* USTALAR VƏ BALANSLAR */}
         <div style={{ marginTop: '25px' }}>
-          <h3>👷 Ustalar və Balanslar ({workers.length})</h3>
-          <p style={{ fontSize: '12px', color: '#94a3b8' }}>💡 Ustanın aylıq hesabatını görmək üçün adının üstünə klikləyin:</p>
-          
-          <div style={{ maxHeight: '380px', overflowY: 'auto', paddingRight: '5px' }}>
+          <h3>👷 Ustalar Və Hesabatları ({workers.length})</h3>
+          <div style={{ maxHeight: '380px', overflowY: 'auto' }}>
             {workers.map(w => {
               const wPayments = payments.filter(p => p.workerId === w.id);
               const paid = wPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -612,17 +650,13 @@ export default function App() {
               const remaining = earned - paid;
 
               return (
-                <div 
-                  key={w.id} 
-                  onClick={() => setSelectedWorkerForHistory(w)}
-                  style={{ backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', border: '1px solid #334155' }}
-                >
+                <div key={w.id} onClick={() => setSelectedWorkerForHistory(w)} style={{ backgroundColor: '#1e293b', padding: '12px', borderRadius: '8px', marginBottom: '10px', cursor: 'pointer', border: '1px solid #334155' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <strong>{w.fullname || w.name}</strong>
                     <span style={{ fontSize: '12px', color: '#94a3b8' }}>Tel: {w.phone}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', fontSize: '13px' }}>
-                    <span>Qazanc: <strong style={{ color: '#38bdf8' }}>{earned} AZN</strong></span>
+                    <span>Maaş Qazancı: <strong style={{ color: '#38bdf8' }}>{earned} AZN</strong></span>
                     <span>Ödənilib: <strong style={{ color: '#4ade80' }}>{paid} AZN</strong></span>
                     <span>Qalan: <strong style={{ color: remaining > 0 ? '#f43f5e' : '#4ade80' }}>{remaining} AZN</strong></span>
                   </div>
@@ -646,19 +680,18 @@ export default function App() {
           </form>
         </div>
 
-        {/* 2. TƏCHİZATÇILAR BÖLMƏSİ */}
+        {/* TƏCHİZATÇILAR BÖLMƏSİ */}
         <div style={{ marginTop: '25px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px' }}>
-          <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '16px' }}>📦 Təchizatçılar (Mal Alışı Və Ödənişlər)</h3>
+          <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '16px' }}>📦 Təchizatçılar (Mal Alışı Və Borclar)</h3>
           <form onSubmit={handleAddSupplier} style={{ marginBottom: '15px' }}>
             <input type="text" placeholder="Təchizatçının Adı / Mağaza" value={supName} onChange={e => setSupName(e.target.value)} style={inputStyle} required />
             <input type="number" placeholder="Alınan Malın Toplam Dəyəri (AZN)" value={supAmount} onChange={e => setSupAmount(e.target.value)} style={inputStyle} required />
             <input type="number" placeholder="İlkin Ödənilən Məbləğ (AZN)" value={supPaid} onChange={e => setSupPaid(e.target.value)} style={inputStyle} />
-            <input type="text" placeholder="Qeyd (Məs: Laminat, Dəstəklər)" value={supNote} onChange={e => setSupNote(e.target.value)} style={inputStyle} />
-            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Təchizatçı Borcunu Əlavə Et</button>
+            <input type="text" placeholder="Qeyd" value={supNote} onChange={e => setSupNote(e.target.value)} style={inputStyle} />
+            <button type="submit" style={{ width: '100%', padding: '12px', backgroundColor: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}>➕ Borcu Əlavə Et</button>
           </form>
 
-          <h4>Siyahı:</h4>
-          <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+          <div style={{ maxHeight: '180px', overflowY: 'auto' }}>
             {suppliers.map(s => (
               <div key={s.id} style={{ backgroundColor: '#0f172a', padding: '10px', borderRadius: '6px', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -674,21 +707,19 @@ export default function App() {
           </div>
         </div>
 
-        {/* 5 & 6. ADMIN MODALİ - AYLARA BÖLÜNMÜŞ HESABAT VƏ SİLMƏ PAROLİ */}
+        {/* ADMIN MODAL - USTANIN ƏTRAFLI TARİXÇƏSİ */}
         {selectedWorkerForHistory && (() => {
           const wPayments = payments.filter(p => p.workerId === selectedWorkerForHistory.id);
           const wJobs = extraJobs.filter(j => j.workerId === selectedWorkerForHistory.id);
+          const wCutting = cuttingServices.filter(c => c.workerId === selectedWorkerForHistory.id);
+          
           const paid = wPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
           const currentW = workers.find(w => w.id === selectedWorkerForHistory.id) || selectedWorkerForHistory;
           const earned = Number(currentW.totalEarned) || 0;
           const remaining = earned - paid;
 
-          const filteredWJobs = wJobs.filter(j => {
-            if (selectedMonthFilter === 'ALL') return true;
-            if (!j.date) return true;
-            const parts = j.date.split('.');
-            return parts.length >= 2 && parts[1] === selectedMonthFilter;
-          });
+          const filteredWJobs = wJobs.filter(j => selectedMonthFilter === 'ALL' || (j.date && j.date.split('.')[1] === selectedMonthFilter));
+          const filteredWCutting = wCutting.filter(c => selectedMonthFilter === 'ALL' || (c.date && c.date.split('.')[1] === selectedMonthFilter));
 
           return (
             <div onClick={() => setSelectedWorkerForHistory(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '15px' }}>
@@ -702,81 +733,59 @@ export default function App() {
                   <button onClick={() => setSelectedWorkerForHistory(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '22px', cursor: 'pointer' }}>✕</button>
                 </div>
 
-                <div style={{ backgroundColor: '#0f172a', padding: '12px', borderRadius: '8px', marginBottom: '15px', display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <div>Qazanc: <br/><strong style={{ color: '#38bdf8', fontSize: '15px' }}>{earned} AZN</strong></div>
-                  <div>Ödənilib: <br/><strong style={{ color: '#4ade80', fontSize: '15px' }}>{paid} AZN</strong></div>
-                  <div>Qalan Borc: <br/><strong style={{ color: remaining > 0 ? '#f43f5e' : '#4ade80', fontSize: '15px' }}>{remaining} AZN</strong></div>
-                </div>
-
                 {/* AY SEÇİMİ */}
-                <div style={{ marginBottom: '15px' }}>
-                  <label style={{ fontSize: '12px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>📆 Görülən işləri aya görə filtrlə:</label>
-                  <select value={selectedMonthFilter} onChange={e => setSelectedMonthFilter(e.target.value)} style={inputStyle}>
-                    <option value="ALL">Bütün Aylar (Arxiv)</option>
-                    <option value="01">Yanvar</option>
-                    <option value="02">Fevral</option>
-                    <option value="03">Mart</option>
-                    <option value="04">Aprel</option>
-                    <option value="05">May</option>
-                    <option value="06">İyun</option>
-                    <option value="07">İyul</option>
-                    <option value="08">Avqust</option>
-                    <option value="09">Sentyabr</option>
-                    <option value="10">Oktyabr</option>
-                    <option value="11">Noyabr</option>
-                    <option value="12">Dekabr</option>
-                  </select>
-                </div>
+                <select value={selectedMonthFilter} onChange={e => setSelectedMonthFilter(e.target.value)} style={inputStyle}>
+                  <option value="ALL">Bütün Aylar (Arxiv)</option>
+                  <option value="01">Yanvar</option>
+                  <option value="02">Fevral</option>
+                  <option value="03">Mart</option>
+                  <option value="04">Aprel</option>
+                  <option value="05">May</option>
+                  <option value="06">İyun</option>
+                  <option value="07">İyul</option>
+                  <option value="08">Avqust</option>
+                  <option value="09">Sentyabr</option>
+                  <option value="10">Oktyabr</option>
+                  <option value="11">Noyabr</option>
+                  <option value="12">Dekabr</option>
+                </select>
 
-                {/* İŞLƏR SİYAHISI */}
-                <h4 style={{ color: '#f59e0b', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🛠️ Görülən Və Tapşırılan İşlər</h4>
-                <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px', paddingRight: '4px' }}>
-                  {filteredWJobs.length === 0 ? (
-                    <p style={{ color: '#64748b', fontSize: '13px', margin: '5px 0' }}>Seçilən ayda iş qeydə alınmayıb.</p>
-                  ) : (
-                    filteredWJobs.map((j) => (
-                      <div key={j.id} style={{ backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '6px', borderLeft: j.assignedByAdmin ? '3px solid #38bdf8' : '3px solid #f59e0b' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <strong style={{ fontSize: '14px' }}>{j.description}</strong>
-                          <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{j.amount} AZN</span>
+                {/* XÜSUSİ KƏSİM XİDMƏTİ TARİXÇƏSİ */}
+                <h4 style={{ color: '#c084fc', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🪚 Sexdə Kəsim Və Material Xidmətləri</h4>
+                <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px' }}>
+                  {filteredWCutting.length === 0 ? <p style={{ color: '#64748b', fontSize: '13px' }}>Kəsim qeydi yoxdur.</p> : (
+                    filteredWCutting.map(c => (
+                      <div key={c.id} style={{ backgroundColor: '#0f172a', padding: '8px 10px', borderRadius: '6px', borderLeft: '3px solid #c084fc' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <strong>{c.materialType} {c.color ? `(${c.color})` : ''}</strong>
+                          <span style={{ color: '#c084fc', fontWeight: 'bold' }}>{c.totalAmount} AZN</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '11px' }}>
-                          <span style={{ color: '#64748b' }}>Tarix: {j.date || 'Yoxdur'}</span>
-                          <strong style={{ color: j.assignedByAdmin ? '#38bdf8' : j.status === 'approved' ? '#4ade80' : j.status === 'rejected' ? '#f43f5e' : '#f59e0b' }}>
-                            {j.assignedByAdmin ? '👑 Admin Tapşırığı' : j.status === 'approved' ? '✓ Təsdiqlənib' : j.status === 'rejected' ? '✕ Rədd edilib' : '⏳ Gözləyir'}
-                          </strong>
+                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                          {c.matCount > 0 && <span>Material: {c.matCount}x{c.matPrice}AZN | </span>}
+                          {c.pvcMeters > 0 && <span>PVC: {c.pvcMeters}m x {c.pvcPrice}AZN | </span>}
+                          {c.transferFee > 0 && <span>Transfer: {c.transferFee}AZN</span>}
                         </div>
                       </div>
                     ))
                   )}
                 </div>
 
-                {/* ÖDƏNİŞ TARIXÇƏSİ */}
-                <h4 style={{ color: '#4ade80', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>💳 Edilən Ödənişlər Tarixçəsi</h4>
-                <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'grid', gap: '8px', paddingRight: '4px' }}>
-                  {wPayments.length === 0 ? (
-                    <p style={{ color: '#64748b', fontSize: '13px', margin: '5px 0' }}>Hələ bu ustaya ödəniş edilməyib.</p>
-                  ) : (
-                    wPayments.map((p) => (
-                      <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '10px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <strong style={{ color: '#4ade80', fontSize: '14px' }}>+{p.amount} AZN</strong>
-                          <div style={{ fontSize: '11px', color: '#64748b' }}>Tarix: {p.date || 'Yoxdur'}</div>
-                        </div>
-                        {p.note && <span style={{ color: '#94a3b8', fontSize: '12px', backgroundColor: '#1e293b', padding: '3px 8px', borderRadius: '4px' }}>{p.note}</span>}
+                {/* MAAŞ / MƏBLƏĞ İŞLƏRİ */}
+                <h4 style={{ color: '#38bdf8', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🛠️ Mebel Yığım İşləri (Maaş)</h4>
+                <div style={{ maxHeight: '150px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px' }}>
+                  {filteredWJobs.map((j) => (
+                    <div key={j.id} style={{ backgroundColor: '#0f172a', padding: '8px 10px', borderRadius: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                        <strong>{j.description}</strong>
+                        <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>{j.amount} AZN</span>
                       </div>
-                    ))
-                  )}
+                    </div>
+                  ))}
                 </div>
 
-                {/* SİLMƏ PAROLİ MODALİ */}
-                <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
-                  <button onClick={() => handleDeleteWorker(currentW.id, currentW.fullname)} style={{ flex: 1, padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
-                    🔒 Ustanı Sil (Admin Şifrəsi ilə)
-                  </button>
-                  <button onClick={() => setSelectedWorkerForHistory(null)} style={{ flex: 1, padding: '10px', backgroundColor: '#334155', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>Bağla</button>
-                </div>
-
+                <button onClick={() => handleDeleteWorker(currentW.id, currentW.fullname)} style={{ width: '100%', padding: '10px', backgroundColor: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', marginTop: '10px' }}>
+                  🔒 Ustanı Sil (Admin Şifrəsi ilə)
+                </button>
               </div>
             </div>
           );
