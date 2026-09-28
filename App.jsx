@@ -59,10 +59,6 @@ export default function App() {
   const [cutPvcPrice, setCutPvcPrice] = useState('0.90');
   const [cutTransferFee, setCutTransferFee] = useState('');
 
-  // Rapor / Hesabat Filtr State-ləri (Admin)
-  const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
-  const [reportMonth, setReportMonth] = useState('ALL');
-
   useEffect(() => {
     const unsubWorkers = onSnapshot(collection(db, 'users'), (snapshot) => {
       setWorkers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
