@@ -840,7 +840,6 @@ export default function App() {
         {selectedWorkerForHistory && (() => {
           const currentW = workers.find(w => w.id === selectedWorkerForHistory.id) || selectedWorkerForHistory;
           
-          // Düzəliş edildi: Hem workerId hem de userId sorgulari desteklenir
           const wPayments = payments.filter(p => p.workerId === currentW.id || p.userId === currentW.id);
           const wJobs = extraJobs.filter(j => j.workerId === currentW.id);
           const wCutting = cuttingServices.filter(c => c.workerId === currentW.id);
@@ -861,6 +860,11 @@ export default function App() {
           const filteredWJobs = wJobs.filter(j => dateMatches(j.date));
           const filteredWCutting = wCutting.filter(c => dateMatches(c.date));
           const filteredWPayments = wPayments.filter(p => dateMatches(p.date));
+
+          // Ustanın Ümumi Qazancı, Ödənilən Və Qalıq Hesablaması
+          const totalEarnedWorker = Number(currentW?.totalEarned) || 0;
+          const totalPaidWorker = wPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+          const totalRemainingWorker = totalEarnedWorker - totalPaidWorker;
 
           return (
             <div onClick={() => setSelectedWorkerForHistory(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '15px' }}>
@@ -897,6 +901,27 @@ export default function App() {
                     <option value="2025">2025 İli</option>
                     <option value="2027">2027 İli</option>
                   </select>
+                </div>
+
+                {/* USTA KABİNETİNDƏKİ KİMİ ÜMUMİ QAZANC, ÖDƏNİLƏN MAAŞ VƏ QALAN HESABAT BLOKU */}
+                <div style={{ backgroundColor: '#0f172a', padding: '12px 15px', borderRadius: '10px', marginBottom: '15px', border: '1px solid #334155' }}>
+                  <h4 style={{ margin: '0 0 10px 0', color: '#38bdf8', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    📊 Normal Mebel İşləri Və Maaş Hesabı
+                  </h4>
+                  <div style={{ display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                      <span style={{ color: '#94a3b8' }}>Ümumi Qazanılan:</span>
+                      <strong style={{ color: '#38bdf8' }}>{totalEarnedWorker} AZN</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                      <span style={{ color: '#94a3b8' }}>Ödənilən Maaş:</span>
+                      <strong style={{ color: '#4ade80' }}>{totalPaidWorker} AZN</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '15px', borderTop: '1px dashed #334155', paddingTop: '6px' }}>
+                      <span>Qalan Alacaq:</span>
+                      <strong style={{ color: totalRemainingWorker > 0 ? '#f43f5e' : '#4ade80' }}>{totalRemainingWorker} AZN</strong>
+                    </div>
+                  </div>
                 </div>
 
                 {/* ÖDƏNİLƏN MAAŞLAR HESABATI */}
