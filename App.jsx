@@ -26,10 +26,10 @@ export default function App() {
 
   // Usta & Admin Ay/İl Filtri
   const [workerMonthFilter, setWorkerMonthFilter] = useState('ALL');
-  const [workerYearFilter, setWorkerYearFilter] = useState(new Date().getFullYear().toString());
+  const [workerYearFilter, setWorkerYearFilter] = useState('ALL');
   const [selectedWorkerForHistory, setSelectedWorkerForHistory] = useState(null);
   const [selectedMonthFilter, setSelectedMonthFilter] = useState('ALL');
-  const [selectedYearFilter, setSelectedYearFilter] = useState(new Date().getFullYear().toString());
+  const [selectedYearFilter, setSelectedYearFilter] = useState('ALL');
 
   // Form State-ləri
   const [reqAmount, setReqAmount] = useState('');
@@ -218,7 +218,7 @@ export default function App() {
         pvcTotal: pvcTotal,
         transferFee: transTotal,
         totalAmount: grandTotal,
-        paidAmount: 0, // İLKİN ÖDƏNİŞ 0
+        paidAmount: 0,
         paymentsHistory: [],
         date: today.toLocaleDateString('az-AZ'),
         isoDate: today.toISOString()
@@ -230,7 +230,7 @@ export default function App() {
     } catch (err) { alert("Xəta baş verdi!"); }
   };
 
-  // USTANIN QAİMƏYƏ ÖDƏNİŞ ETMƏSİ (HİSSƏLİ VƏ YA TAM)
+  // USTANIN QAİMƏYƏ ÖDƏNİŞ ETMƏSİ
   const handlePayCuttingDoc = async (isFullPay = false) => {
     if (!selectedCuttingDoc) return;
     const currentPaid = Number(selectedCuttingDoc.paidAmount) || 0;
@@ -402,14 +402,17 @@ export default function App() {
     const allWorkerJobsAndRequests = extraJobs.filter(j => j.workerId === activeWorker.id);
     const allWorkerCutting = cuttingServices.filter(c => c.workerId === activeWorker.id);
 
-    // Ay/İl Filtri
+    // Düzəldilmiş tarix filtri (Bütün köhnə qeydləri dəstəkləyir)
     const dateMatches = (dStr) => {
-      if (!dStr) return false;
+      if (!dStr) return true;
+      if (workerMonthFilter === 'ALL' && workerYearFilter === 'ALL') return true;
+      
       const parts = dStr.split('.');
+      if (parts.length < 3) return true;
       const m = parts[1];
       const y = parts[2];
       const mOk = workerMonthFilter === 'ALL' || m === workerMonthFilter;
-      const yOk = !workerYearFilter || y === workerYearFilter;
+      const yOk = workerYearFilter === 'ALL' || y === workerYearFilter;
       return mOk && yOk;
     };
 
@@ -455,6 +458,7 @@ export default function App() {
               <option value="12">Dekabr (12)</option>
             </select>
             <select value={workerYearFilter} onChange={e => setWorkerYearFilter(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+              <option value="ALL">Bütün İllər</option>
               <option value="2026">2026 İli</option>
               <option value="2025">2025 İli</option>
               <option value="2027">2027 İli</option>
@@ -517,7 +521,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* NORMAL MAAŞ / İŞ HESABATI */}
+        {/* NORMAL MAAŞ / İŞ HESABATI VƏ ÖDƏNİŞLƏR */}
         <div style={{ marginTop: '20px', backgroundColor: '#1e293b', padding: '15px', borderRadius: '10px', border: '1px solid #334155' }}>
           <h3 style={{ color: '#38bdf8', marginTop: 0 }}>📊 Normal Mebel İşləri Və Maaş Hesabım</h3>
           <div style={{ display: 'grid', gap: '8px', borderBottom: '1px dashed #334155', paddingBottom: '12px', marginBottom: '15px' }}>
@@ -535,14 +539,19 @@ export default function App() {
             </div>
           </div>
 
-          <h4>💳 Ödəniş Tarixçəsi</h4>
-          <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '15px' }}>
-            {filteredWorkerPayments.map(p => (
-              <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{p.amount} AZN</span>
-                <small style={{ color: '#94a3b8' }}>{p.date} {p.note ? `(${p.note})` : ''}</small>
-              </div>
-            ))}
+          <h4>💳 Bütün Ödəniş Tarixçəsi ({filteredWorkerPayments.length})</h4>
+          <div style={{ maxHeight: '200px', overflowY: 'auto', marginBottom: '15px' }}>
+            {filteredWorkerPayments.length === 0 ? <p style={{ fontSize: '13px', color: '#64748b' }}>Ödəniş qeydə alınmayıb.</p> : (
+              filteredWorkerPayments.map(p => (
+                <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '8px 12px', borderRadius: '6px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '15px' }}>+{p.amount} AZN</span>
+                    {p.note && <div style={{ fontSize: '11px', color: '#94a3b8' }}>Qeyd: {p.note}</div>}
+                  </div>
+                  <small style={{ color: '#64748b' }}>{p.date}</small>
+                </div>
+              ))
+            )}
           </div>
 
           <h4>📋 Görülən İşlər Və Sorğular</h4>
@@ -837,17 +846,21 @@ export default function App() {
           const currentW = workers.find(w => w.id === selectedWorkerForHistory.id) || selectedWorkerForHistory;
 
           const dateMatches = (dStr) => {
-            if (!dStr) return false;
+            if (!dStr) return true;
+            if (selectedMonthFilter === 'ALL' && selectedYearFilter === 'ALL') return true;
+
             const parts = dStr.split('.');
+            if (parts.length < 3) return true;
             const m = parts[1];
             const y = parts[2];
             const mOk = selectedMonthFilter === 'ALL' || m === selectedMonthFilter;
-            const yOk = !selectedYearFilter || y === selectedYearFilter;
+            const yOk = selectedYearFilter === 'ALL' || y === selectedYearFilter;
             return mOk && yOk;
           };
 
           const filteredWJobs = wJobs.filter(j => dateMatches(j.date));
           const filteredWCutting = wCutting.filter(c => dateMatches(c.date));
+          const filteredWPayments = wPayments.filter(p => dateMatches(p.date));
 
           return (
             <div onClick={() => setSelectedWorkerForHistory(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '15px' }}>
@@ -879,15 +892,32 @@ export default function App() {
                     <option value="12">Dekabr</option>
                   </select>
                   <select value={selectedYearFilter} onChange={e => setSelectedYearFilter(e.target.value)} style={{ ...inputStyle, marginBottom: 0 }}>
+                    <option value="ALL">Bütün İllər</option>
                     <option value="2026">2026 İli</option>
                     <option value="2025">2025 İli</option>
                     <option value="2027">2027 İli</option>
                   </select>
                 </div>
 
+                {/* ÖDƏNİLƏN MAAŞLAR HESABATI */}
+                <h4 style={{ color: '#4ade80', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>💳 Ödənilən Maaşlar ({filteredWPayments.length})</h4>
+                <div style={{ maxHeight: '140px', overflowY: 'auto', display: 'grid', gap: '6px', marginBottom: '15px' }}>
+                  {filteredWPayments.length === 0 ? <p style={{ color: '#64748b', fontSize: '13px' }}>Maaş ödənişi yoxdur.</p> : (
+                    filteredWPayments.map(p => (
+                      <div key={p.id} style={{ backgroundColor: '#0f172a', padding: '8px 10px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ color: '#4ade80', fontWeight: 'bold' }}>+{p.amount} AZN</span>
+                          {p.note && <span style={{ fontSize: '11px', color: '#94a3b8', marginLeft: '8px' }}>({p.note})</span>}
+                        </div>
+                        <small style={{ color: '#64748b' }}>{p.date}</small>
+                      </div>
+                    ))
+                  )}
+                </div>
+
                 {/* QAİMƏ VƏ KƏSİM XİDMƏTLƏRİ */}
                 <h4 style={{ color: '#c084fc', margin: '10px 0 8px 0', borderBottom: '1px dashed #334155', paddingBottom: '4px' }}>🪚 Sexdə Kəsim Və Material Qaimələri</h4>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px' }}>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', display: 'grid', gap: '8px', marginBottom: '15px' }}>
                   {filteredWCutting.length === 0 ? <p style={{ color: '#64748b', fontSize: '13px' }}>Kəsim qeydi yoxdur.</p> : (
                     filteredWCutting.map(c => {
                       const total = Number(c.totalAmount) || 0;
